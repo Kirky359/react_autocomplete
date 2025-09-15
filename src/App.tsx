@@ -107,7 +107,7 @@ export const App: React.FC<Props> = ({ delay = 300, onSelected }) => {
         <div
           ref={dropdownRef}
           className={`dropdown ${
-            isFocused && filteredPeople.length > 0 ? 'is-active' : ''
+            isFocused && (filteredPeople.length > 0 || error) ? 'is-active' : ''
           }`}
         >
           <div className="dropdown-trigger">
