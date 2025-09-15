@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, FocusEvent } from 'react';
 import './App.scss';
 import { peopleFromServer } from './data/people';
 import debounce from 'lodash.debounce';
@@ -6,8 +6,8 @@ import { Person } from './types/Person';
 import 'bulma/css/bulma.min.css';
 
 type Props = {
-  delay?: number; // delay опциональный
-  onSelected?: (person: Person) => void; // коллбек для выбранного человека
+  delay?: number; // опционально
+  onSelected?: (person: Person) => void;
 };
 
 export const App: React.FC<Props> = ({ delay = 300, onSelected }) => {
@@ -20,10 +20,10 @@ export const App: React.FC<Props> = ({ delay = 300, onSelected }) => {
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [inputValue, setInputValue] = useState('');
 
-  // Чтобы не фильтровать повторно одно и то же
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const lastQueryRef = useRef('');
 
-  // Дебаунс для фильтрации
   const handleShowList = useMemo(
     () =>
       debounce((query: string) => {
@@ -44,6 +44,8 @@ export const App: React.FC<Props> = ({ delay = 300, onSelected }) => {
         if (!query) {
           setFilteredPeople(peopleFromServer);
         }
+
+        lastQueryRef.current = normalized;
       }, delay),
     [delay],
   );
@@ -58,7 +60,39 @@ export const App: React.FC<Props> = ({ delay = 300, onSelected }) => {
     setSelectedPerson(person);
     setInputValue(person.name);
     setIsFocused(false);
-    onSelected?.(person); // коллбек наружу
+    onSelected?.(person);
+  };
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = event.target.value;
+    const normalized = raw.trim();
+
+    setInputValue(raw);
+
+    if (normalized === '') {
+      setFilteredPeople(peopleFromServer);
+      setError(false);
+      setIsFocused(true);
+
+      return;
+    }
+
+    if (normalized !== lastQueryRef.current) {
+      handleShowList(normalized);
+    }
+
+    setSelectedPerson(null);
+    setIsFocused(true);
+  };
+
+  const handleInputBlur = (event: FocusEvent<HTMLInputElement>) => {
+    const related = event.relatedTarget as HTMLElement | null;
+
+    if (related && dropdownRef.current?.contains(related)) {
+      return;
+    }
+
+    setIsFocused(false);
   };
 
   return (
@@ -71,6 +105,7 @@ export const App: React.FC<Props> = ({ delay = 300, onSelected }) => {
         </h1>
 
         <div
+          ref={dropdownRef}
           className={`dropdown ${
             isFocused && filteredPeople.length > 0 ? 'is-active' : ''
           }`}
@@ -83,36 +118,9 @@ export const App: React.FC<Props> = ({ delay = 300, onSelected }) => {
               className="input"
               data-qa="search-input"
               data-cy="search-input"
-              onChange={event => {
-                const raw = event.target.value;
-                const normalized = raw.trim();
-
-                setInputValue(raw);
-
-                if (normalized === '') {
-                  setFilteredPeople(peopleFromServer);
-                  setError(false);
-                  setIsFocused(true);
-
-                  return;
-                }
-
-                if (normalized !== lastQueryRef.current) {
-                  handleShowList(normalized);
-                  lastQueryRef.current = normalized;
-                }
-
-                setSelectedPerson(null);
-                setIsFocused(true);
-              }}
+              onChange={handleInputChange}
               onFocus={() => setIsFocused(true)}
-              onBlur={() => {
-                setTimeout(() => {
-                  if (!document.activeElement?.closest('.dropdown')) {
-                    setIsFocused(false);
-                  }
-                }, 200);
-              }}
+              onBlur={handleInputBlur}
             />
           </div>
 
@@ -125,35 +133,30 @@ export const App: React.FC<Props> = ({ delay = 300, onSelected }) => {
             <div className="dropdown-content">
               {filteredPeople.map(person => (
                 <a
-                  key={person.name}
+                  key={person.slug}
                   className="dropdown-item"
                   data-qa="suggestion-item"
                   data-cy="suggestion-item"
                   onClick={() => handleSelect(person)}
+                  tabIndex={0}
                 >
                   {person.name}
                 </a>
               ))}
+
+              {error && (
+                <div
+                  className="dropdown-item has-text-danger is-unselectable"
+                  role="alert"
+                  data-qa="no-suggestions-message"
+                  data-cy="no-suggestions-message"
+                >
+                  No matching suggestions
+                </div>
+              )}
             </div>
           </div>
         </div>
-
-        {error && (
-          <div
-            className="
-              notification
-              is-danger
-              is-light
-              mt-3
-              is-align-self-flex-start
-            "
-            role="alert"
-            data-qa="no-suggestions-message"
-            data-cy="no-suggestions-message"
-          >
-            <p className="has-text-danger">No matching suggestions</p>
-          </div>
-        )}
       </main>
     </div>
   );
